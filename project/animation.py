@@ -10,7 +10,6 @@ class VehicleAnimation:
         self.car_length = car_length
         self.car_width = car_width
 
-        # Create the car rectangle (centered at rear axle)
         self.car_patch = patches.Rectangle(
             (0, 0), car_length, car_width,
             fc='blue', ec='black', alpha=0.8
@@ -18,9 +17,8 @@ class VehicleAnimation:
         self.ax.add_patch(self.car_patch)
 
     def update(self, state):
-        x, y, theta, _ = state  # Ignore velocity for drawing
+        x, y, theta, _ = state  
 
-        # Shift car so that it's centered at rear axle
         rear_to_center = self.car_length / 2.0
         cx = x - rear_to_center * np.cos(theta)
         cy = y - rear_to_center * np.sin(theta)

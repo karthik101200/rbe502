@@ -1,4 +1,3 @@
-# path_planner.py
 
 def get_start_and_goal():
     start = [0.0, 0.0, 0.0, 0.0]    # [x, y, theta, v]
