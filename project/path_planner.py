@@ -2,7 +2,7 @@
 
 def get_start_and_goal():
     start = [0.0, 0.0, 0.0, 0.0]    # [x, y, theta, v]
-    goal = [15.0, 10.0]             # [x_goal, y_goal]
+    goal = [150.0, 100.0]             # [x_goal, y_goal]
     return start, goal
 
 def generate_reference_trajectory(start, goal, N, dt, v_desired=3.0):

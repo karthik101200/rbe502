@@ -66,6 +66,8 @@ def mpc_controller(state, ref_traj, N=15, dt=0.1, wheelbase=2.5):
 
     try:
         sol = opti.solve()
-        return np.array([sol.value(U[0, 0]), sol.value(U[1, 0])])
+        control = np.array([sol.value(U[0, 0]), sol.value(U[1, 0])])
+        predicted_states = np.array([sol.value(X[:, k]) for k in range(N + 1)]).T
+        return control, predicted_states
     except:
-        return np.array([0.0, 0.0])
+        return np.array([0.0, 0.0]), np.zeros((4, N + 1))
