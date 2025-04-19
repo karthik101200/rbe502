@@ -6,15 +6,26 @@ import numpy as np
 import matplotlib.transforms as mtransforms
 
 class VehicleAnimation:
-    def __init__(self, ax, car_length=4.5, car_width=2.0, track=None):
+    # Add left/right boundary args
+    def __init__(self, ax, car_length=4.5, car_width=2.0, track=None, left_boundary=None, right_boundary=None):
         self.ax = ax
         self.car_length = car_length
         self.car_width = car_width
         self.track = track
+        self.left_boundary = left_boundary
+        self.right_boundary = right_boundary
 
-        # Plot reference track
+        # Plot reference track (centerline)
         if self.track is not None:
             self.ax.plot(self.track[:, 0], self.track[:, 1], '--k', alpha=0.7, label="Reference Track")
+
+        # *** Plot track boundaries if provided ***
+        if self.left_boundary is not None:
+            self.ax.plot(self.left_boundary[:, 0], self.left_boundary[:, 1], '-m', alpha=0.5, lw=1, label="Track Boundary")
+        if self.right_boundary is not None:
+            # Only add label once
+            label = None if self.left_boundary is not None else "Track Boundary"
+            self.ax.plot(self.right_boundary[:, 0], self.right_boundary[:, 1], '-m', alpha=0.5, lw=1, label=label)
 
         # --- Vehicle Patches (no change) ---
         self.car_body = patches.Rectangle(
@@ -28,9 +39,8 @@ class VehicleAnimation:
         self.rear_axle_marker.set_transform(self.transform + self.ax.transData)
         self.ax.add_patch(self.car_body)
         self.ax.add_patch(self.rear_axle_marker)
-        # --- End Vehicle Patches ---
 
-        # *** Add plot element for the predicted trajectory ***
+        # --- Predicted Line (no change) ---
         self.predicted_line, = self.ax.plot([], [], 'g.--', lw=1.5, alpha=0.8, label="Predicted Horizon")
 
         self.setup_legend() # Call legend setup
