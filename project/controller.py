@@ -35,12 +35,19 @@ def mpc_controller(state, ref_traj, N=15, dt=0.1, wheelbase=2.5):
         opti.subject_to(X[:, k + 1] == x_next)
 
     # Cost weights
-    Q = np.diag([100, 100])
-    Q_theta = 10
-    Q_v = 1
-    R = np.diag([1, 10])
+    Q = np.diag([10.0, 10.0]) # Reduced from 100
+    Q_theta = 1.0            # Reduced from 10
+    Q_v = 5.0
+    R = np.diag([0.1, 1.0])   # Reduced from [1, 10]
     obj = 0
 
+    opts = {
+        "print_time": False,
+        "ipopt.print_level": 3, # Increase print level (0-12, 3 or 5 is usually informative)
+        "ipopt.max_iter": 300    # Increase max iterations slightly (default is often 3000, but ensure it's not too low)
+        # "ipopt.acceptable_tol": 1e-4 # Optionally relax tolerance slightly for testing
+    }
+    opti.solver("ipopt", opts)
     for k in range(N):
         pos_error = X[0:2, k] - X_ref[:, k]
         desired_heading = ca.atan2(X_ref[1, k] - X[1, k], X_ref[0, k] - X[0, k])
@@ -64,8 +71,10 @@ def mpc_controller(state, ref_traj, N=15, dt=0.1, wheelbase=2.5):
     opti.set_value(X0, state)
     opti.set_value(X_ref, ref_traj)
 
+    # Inside mpc_controller function in controller.py
     try:
         sol = opti.solve()
         return np.array([sol.value(U[0, 0]), sol.value(U[1, 0])])
-    except:
+    except Exception as e: # Catch specific exception if possible, or general Exception
+        print(f"!!! MPC Solver failed: {e}") # Add this print statement
         return np.array([0.0, 0.0])
