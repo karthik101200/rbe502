@@ -11,7 +11,7 @@ R = np.diag([0.1, 1.0])
 # *** Add track_width parameter and centerline ref ***
 def mpc_controller(state, ref_traj_segment, N=15, dt=0.1, wheelbase=2.5,
                    centerline_ref_full=None, # Pass the full centerline
-                   track_width=5.0):         # Pass the track width
+                   track_width=5.0, obstacle_safety_margin=1.0, obstacles=None):         # Pass the track width
     # --- (Symbolic variables, Dynamics model f - same as before) ---
     x, y, theta, v = ca.MX.sym('x'), ca.MX.sym('y'), ca.MX.sym('theta'), ca.MX.sym('v')
     states = ca.vertcat(x, y, theta, v)
@@ -111,7 +111,18 @@ def mpc_controller(state, ref_traj_segment, N=15, dt=0.1, wheelbase=2.5,
             # *** Proper Lateral Deviation Constraint (Conceptual - Requires CasADi Implementation) ***
             # lateral_deviation = normal_vec[0]*diff_vec[0] + normal_vec[1]*diff_vec[1]
             # opti.subject_to(opti.bounded(-half_track_width, lateral_deviation, half_track_width))
+        if obstacles is not None:
+            # For each step k in the prediction horizon
+            vehicle_pos = X[0:2, k] # Predicted position (symbolic)
+            for obs in obstacles:
+                # Calculate squared distance to obstacle center (symbolically)
+                obs_center = ca.DM([obs['x'], obs['y']]) # CasADi matrix/vector
+                dist_sq_to_obs = ca.sumsqr(vehicle_pos - obs_center)
 
+                # Add constraint: squared distance must be >= squared sum of radii
+                # (obstacle radius + safety margin)^2
+                min_dist_sq = (obs['radius'] + obstacle_safety_margin)**2
+                opti.subject_to(dist_sq_to_obs >= min_dist_sq)
 
     opti.minimize(obj)
 

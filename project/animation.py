@@ -7,14 +7,14 @@ import matplotlib.transforms as mtransforms
 
 class VehicleAnimation:
     # Add left/right boundary args
-    def __init__(self, ax, car_length=4.5, car_width=2.0, track=None, left_boundary=None, right_boundary=None):
+    def __init__(self, ax, car_length=4.5, car_width=2.0, track=None, left_boundary=None, right_boundary=None, obstacles=None):
         self.ax = ax
         self.car_length = car_length
         self.car_width = car_width
         self.track = track
         self.left_boundary = left_boundary
         self.right_boundary = right_boundary
-
+        self.obstacles = obstacles
         # Plot reference track (centerline)
         if self.track is not None:
             self.ax.plot(self.track[:, 0], self.track[:, 1], '--k', alpha=0.7, label="Reference Track")
@@ -26,7 +26,31 @@ class VehicleAnimation:
             # Only add label once
             label = None if self.left_boundary is not None else "Track Boundary"
             self.ax.plot(self.right_boundary[:, 0], self.right_boundary[:, 1], '-m', alpha=0.5, lw=1, label=label)
+        if self.obstacles is not None: # Rename obstacles arg if needed
+            for i, obs_car in enumerate(self.obstacles):
+                # Rectangle needs bottom-left corner, width, height, angle
+                # Calculate bottom-left relative to center (x, y) and angle theta
+                center_x, center_y = obs_car['x'], obs_car['y']
+                length, width = obs_car['length'], obs_car['width']
+                theta_rad = obs_car['theta'] # Assuming theta is in radians
+                theta_deg = np.degrees(theta_rad)
 
+                # Calculate corner assuming (x,y) is center
+                # Bottom-left corner in local frame (center is 0,0) is (-length/2, -width/2)
+                local_bl_x, local_bl_y = -length / 2, -width / 2
+
+                # Rotate bottom-left corner
+                rotated_bl_x = np.cos(theta_rad) * local_bl_x - np.sin(theta_rad) * local_bl_y
+                rotated_bl_y = np.sin(theta_rad) * local_bl_x + np.cos(theta_rad) * local_bl_y
+
+                # Translate to global position
+                global_bl_x = center_x + rotated_bl_x
+                global_bl_y = center_y + rotated_bl_y
+
+                rect = patches.Rectangle((global_bl_x, global_bl_y), length, width, angle=theta_deg,
+                                        color='grey', alpha=0.8,
+                                        label="Static Obstacle Car" if i == 0 else "")
+                self.ax.add_patch(rect)
         # --- Vehicle Patches (no change) ---
         self.car_body = patches.Rectangle(
             (0, -self.car_width / 2.0),

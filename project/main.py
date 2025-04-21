@@ -12,7 +12,7 @@ from config import TIMEDIFF as DT, WHEELBASE
 from scipy.spatial.distance import cdist
 # --- Simulation Setup ---
 selected_path_type = "racetrack" # Choose path type
-track_width = 5.0                # Define track width
+track_width = 15.0                # Define track width
 
 path_params = {
     # ... (params for straight, sinusoid - add track_width if needed) ...
@@ -20,6 +20,20 @@ path_params = {
     "racetrack": {"length": 60, "width": 30, "num_points": 500, "track_width": track_width},
     "figure-eight": {"scale": 20, "total_time_gen": 50, "track_width": track_width}
 }
+
+# In main.py
+car_length_static = WHEELBASE * 1.8 # Or specific value
+car_width_static = WHEELBASE * 0.9  # Or specific value
+static_obstacle_cars = [
+    {'x': 60, 'y': 0, 'theta': np.radians(10), 'length': car_length_static, 'width': car_width_static},
+    {'x': -12, 'y': 20, 'theta': np.radians(10.5), 'length': car_length_static, 'width': car_width_static},
+]
+
+# Create points for the controller (Example: just centers)
+obstacle_points_for_controller = [{'x': obs['x'], 'y': obs['y'], 'radius': 0.1} # Treat center as tiny circle
+                                   for obs in static_obstacle_cars]
+
+obstacle_safety_margin = 3.0 # Meters
 
 # *** Generate path and get boundaries ***
 ref_path_centerline, start_state, estimated_duration, left_boundary, right_boundary = generate_path(
@@ -31,7 +45,7 @@ state = start_state
 current_time = 0.0
 max_sim_steps = int(estimated_duration / DT) + 200
 path_index = 0
-N = 15
+N = 20
 
 # --- Plotting Setup ---
 fig, ax = plt.subplots(figsize=(12, 9))
@@ -50,6 +64,7 @@ else:
 # *** Pass boundaries to animation ***
 vis = VehicleAnimation(ax, track=ref_path_centerline,
                        left_boundary=left_boundary, right_boundary=right_boundary, # Pass boundaries
+                       obstacles = static_obstacle_cars,
                        car_length=WHEELBASE * 1.8, car_width=WHEELBASE * 0.9)
 vis.setup_plot(xlim=xlim, ylim=ylim)
 plt.title(f"MPC Bicycle Model Tracking: {selected_path_type.capitalize()} Path w/ Boundaries")
@@ -84,7 +99,9 @@ for step in range(max_sim_steps):
                                            ref_segment_cost.T, # Segment for cost term
                                            N=N, dt=DT, wheelbase=WHEELBASE,
                                            centerline_ref_full=ref_path_centerline, # Full path for constraints
-                                           track_width=track_width) # Track width for constraints
+                                           track_width=track_width,
+                                           obstacle_safety_margin=obstacle_safety_margin,
+                                           obstacles=obstacle_points_for_controller) # Track width for constraints
 
     # Update state using the bicycle model
     state = kinematic_bicycle_model(state, control, DT, WHEELBASE)
