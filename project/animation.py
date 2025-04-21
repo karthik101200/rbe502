@@ -91,7 +91,7 @@ class VehicleAnimation:
         self.ax.set_xlim(xlim)
         self.ax.set_ylim(ylim)
         self.ax.set_aspect('equal', adjustable='box')
-        self.ax.grid(True)
+        # self.ax.grid(True)
         self.ax.set_xlabel("X coordinate (m)")
         self.ax.set_ylabel("Y coordinate (m)")
         # self.setup_legend() # Legend setup moved to end of init

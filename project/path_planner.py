@@ -96,6 +96,30 @@ def generate_racetrack_spline(length=50.0, width=30.0, num_points=500, track_wid
     print(f"Generated spline racetrack path with {len(centerline)} points.")
     return centerline, left_boundary, right_boundary, tck
 
+def generate_complex_racetrack(num_points=800, track_width=5.0, s=0):
+    anchor_points = np.array([
+        [0, 0], [20, -10], [40, -20],
+        [50, -10], [60, 10], [70, 20],
+        [80, 10], [90, -10], [100, -20],
+        [120, -10], [130, 10], [140, 20],
+        [150, 10], [160, 0], [140, -10],
+        [120, -20], [100, -10], [80, 0],
+        [50, 10], [20, 10], [0, 0]
+    ])
+    tck, u = interpolate.splprep([anchor_points[:, 0], anchor_points[:, 1]], s=s, per=True, k=3)
+    u_fine = np.linspace(0, 1, num_points)
+    x_fine, y_fine = interpolate.splev(u_fine, tck)
+    centerline = np.vstack((x_fine, y_fine)).T
+    dx_fine, dy_fine = interpolate.splev(u_fine, tck, der=1)
+    normals = np.vstack((-dy_fine, dx_fine)).T
+    norm_magnitudes = np.linalg.norm(normals, axis=1)
+    valid_norms = norm_magnitudes > 1e-6
+    unit_normals = np.zeros_like(normals)
+    unit_normals[valid_norms] = normals[valid_norms] / norm_magnitudes[valid_norms, np.newaxis]
+    half_width = track_width / 2.0
+    left_boundary = centerline - unit_normals * half_width
+    right_boundary = centerline + unit_normals * half_width
+    return centerline, left_boundary, right_boundary, tck
 
 # --- Path Selection Function (Updated) ---
 def generate_path(path_type="racetrack", **kwargs):
@@ -111,16 +135,21 @@ def generate_path(path_type="racetrack", **kwargs):
         path, _, _ = generate_straight_line_path(start_xy, goal_xy, num_points)
         start_state = get_default_start_state()
         start_state[0:2] = start_xy
-        start_state[2] = np.arctan2(goal_xy[1] - start_xy[1], goal_xy[0] - start_xy[0])
+        start_state[2] = 0#np.arctan2(goal_xy[1] - start_xy[1], goal_xy[0] - start_xy[0])
+        start_state[3] = 1.0
         sim_duration_estimate = np.linalg.norm(np.array(goal_xy) - np.array(start_xy)) / 3.0
 
     elif path_type == "sinusoid":
+        start_xy = kwargs.get("start_xy", [0.0, 0.0])
+        goal_xy = kwargs.get("goal_xy", [60.0, 0.0])
         length = kwargs.get("length", 50.0)
         amplitude = kwargs.get("amplitude", 5.0)
         frequency = kwargs.get("frequency", 0.1)
         num_points = kwargs.get("num_points", 500)
         path, left_boundary, right_boundary = generate_sinusoid_path(length, amplitude, frequency, num_points, track_width)
         start_state = get_default_start_state() # Starts at (0,0) angle 0
+        start_state[2] = np.arctan2(goal_xy[1] - start_xy[1], goal_xy[0] - start_xy[0])
+        start_state[3] = 1.0
         sim_duration_estimate = length / 3.0
 
     elif path_type == "racetrack":
@@ -167,6 +196,16 @@ def generate_path(path_type="racetrack", **kwargs):
         start_state = np.array([path[0,0], path[0,1], np.arctan2(dy[0],dx[0]), 0.0]) # Use initial tangent
         print(f"Generated figure-eight path with {len(path)} points.")
         sim_duration_estimate = total_time_gen * 1.1
+
+    elif path_type == "complex-racetrack":
+        num_points = kwargs.get("num_points", 700)
+        path, left_boundary, right_boundary, tck = generate_complex_racetrack(num_points, track_width)
+        start_state = get_default_start_state()
+        start_state[0:2] = path[0, :]
+        dx, dy = interpolate.splev(0, tck, der=1)
+        start_state[2] = np.arctan2(dy, dx)
+        start_state[3] = 1.0
+        sim_duration_estimate = 100.0
 
     else:
         raise ValueError(f"Unknown path_type: {path_type}")

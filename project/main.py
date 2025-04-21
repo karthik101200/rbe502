@@ -3,6 +3,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+import os
+import cv2
+from tqdm import tqdm
 
 from dynamics import kinematic_bicycle_model
 from animation import VehicleAnimation
@@ -71,12 +74,13 @@ plt.title(f"MPC Bicycle Model Tracking: {selected_path_type.capitalize()} Path w
 trajectory_line, = ax.plot([], [], 'b-', lw=1.5, label="Actual Trajectory")
 trajectory_points = [state[:2].copy()]
 vis.setup_legend()
+frames = []
 
 # --- Simulation Loop ---
 start_loop_time = time.time()
 lap_completed = False
 
-for step in range(max_sim_steps):
+for step in tqdm(range(max_sim_steps)):
     current_pos = state[:2]
     # Find closest point on CENTERLINE for target calculation
     distances = cdist(current_pos.reshape(1,-1), ref_path_centerline)
@@ -103,6 +107,8 @@ for step in range(max_sim_steps):
                                            obstacle_safety_margin=obstacle_safety_margin,
                                            obstacles=obstacle_points_for_controller) # Track width for constraints
 
+    print(f"Control: {control}, Predicted Path: {predicted_xy}")
+
     # Update state using the bicycle model
     state = kinematic_bicycle_model(state, control, DT, WHEELBASE)
 
@@ -118,7 +124,13 @@ for step in range(max_sim_steps):
     # Update plot title
     ax.set_title(f"MPC: {selected_path_type.capitalize()} (Time: {current_time:.2f}s)")
 
-    plt.pause(0.001)
+    # plt.pause(0.001)
+
+    # Render frame
+    fig.canvas.draw()
+    frame_image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
+    frame_image = frame_image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    frames.append(frame_image)
     current_time += DT
 
     # --- (Stopping Conditions - no change) ---
@@ -127,4 +139,13 @@ for step in range(max_sim_steps):
 end_loop_time = time.time()
 # ... (print statements) ...
 
-plt.show()
+# plt.show()
+
+output_dir = "output"
+os.makedirs(output_dir, exist_ok=True)
+video_filename = os.path.join(output_dir, "trajectory_simulation.mp4")
+height, width, _ = frames[0].shape
+out = cv2.VideoWriter(video_filename, cv2.VideoWriter_fourcc(*'mp4v'), 20, (width, height))
+for frame in frames:
+    out.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+out.release()
