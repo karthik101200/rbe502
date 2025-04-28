@@ -1,7 +1,7 @@
 import casadi as ca
 import numpy as np
 from scipy.spatial.distance import cdist # Needed again for finding closest point
-
+from config import TIMEDIFF as DT, WHEELBASE
 # --- (Weights Q, R - same as before) ---
 Q = np.diag([1.0, 1.0])
 Q_theta = 1.0
@@ -11,8 +11,16 @@ R = np.diag([0.1, 1.0])
 # *** Add track_width parameter and centerline ref ***
 def mpc_controller(state, ref_traj_segment, N=15, dt=0.1, wheelbase=2.5,
                    centerline_ref_full=None, # Pass the full centerline
-                   track_width=5.0, obstacle_safety_margin=1.0, obstacles=None):         # Pass the track width
+                   track_width=5.0, obstacle_safety_margin=1.0, predicted_obs_centers=None):         # Pass the track width
     # --- (Symbolic variables, Dynamics model f - same as before) ---
+
+    car_length = WHEELBASE * 1.8
+    car_width = WHEELBASE * 0.9
+    ego_points_local = [
+        ca.DM([0, -car_width / 2]), ca.DM([0, car_width / 2]),
+        ca.DM([car_length, -car_width / 2]), ca.DM([car_length, car_width / 2]),
+        ca.DM([car_length / 2, 0]),
+    ]
     x, y, theta, v = ca.MX.sym('x'), ca.MX.sym('y'), ca.MX.sym('theta'), ca.MX.sym('v')
     states = ca.vertcat(x, y, theta, v)
     n_states = states.size()[0]
@@ -32,7 +40,10 @@ def mpc_controller(state, ref_traj_segment, N=15, dt=0.1, wheelbase=2.5,
     U = opti.variable(n_controls, N)
     X0 = opti.parameter(n_states)
     X_ref_segment = opti.parameter(2, N) # Reference segment for cost calculation
-
+    obs_pred_params = []
+    if predicted_obs_centers is not None:
+        for i in range(len(predicted_obs_centers)):
+            obs_pred_params.append(opti.parameter(2, N+1))
     opti.subject_to(X[:, 0] == X0)
     for k in range(N):
         x_next = X[:, k] + dt * f(X[:, k], U[:, k])
@@ -61,7 +72,7 @@ def mpc_controller(state, ref_traj_segment, N=15, dt=0.1, wheelbase=2.5,
         # ... using X_ref_segment for desired heading calc ...
         desired_heading = ca.atan2(X_ref_segment[1, k] - X[1, k], X_ref_segment[0, k] - X[0, k])
         heading_error = ca.atan2(ca.sin(desired_heading - X[2, k]), ca.cos(desired_heading - X[2, k]))
-        speed_error = X[3, k] - 3.0
+        speed_error = X[3, k] - 4.0
 
         obj += ca.mtimes([pos_error.T, Q, pos_error])
         obj += Q_theta * heading_error**2
@@ -111,19 +122,24 @@ def mpc_controller(state, ref_traj_segment, N=15, dt=0.1, wheelbase=2.5,
             # *** Proper Lateral Deviation Constraint (Conceptual - Requires CasADi Implementation) ***
             # lateral_deviation = normal_vec[0]*diff_vec[0] + normal_vec[1]*diff_vec[1]
             # opti.subject_to(opti.bounded(-half_track_width, lateral_deviation, half_track_width))
-        if obstacles is not None:
-            # For each step k in the prediction horizon
-            vehicle_pos = X[0:2, k] # Predicted position (symbolic)
-            for obs in obstacles:
-                # Calculate squared distance to obstacle center (symbolically)
-                obs_center = ca.DM([obs['x'], obs['y']]) # CasADi matrix/vector
-                dist_sq_to_obs = ca.sumsqr(vehicle_pos - obs_center)
-
-                # Add constraint: squared distance must be >= squared sum of radii
-                # (obstacle radius + safety margin)^2
-                min_dist_sq = (obs['radius'] + obstacle_safety_margin)**2
-                opti.subject_to(dist_sq_to_obs >= min_dist_sq)
-
+        if predicted_obs_centers is not None:
+            # For each step k in the prediction horizon            x_k = X[0, k]
+            x_k = X[0, k]
+            y_k = X[1, k]
+            theta_k = X[2, k]
+            cos_theta = ca.cos(theta_k)
+            sin_theta = ca.sin(theta_k)
+            global_points = []
+            for pt_local in ego_points_local:
+                x_gloval = cos_theta * pt_local[0] - sin_theta * pt_local[1] + x_k
+                y_gloval = sin_theta * pt_local[0] + cos_theta * pt_local[1] + y_k
+                global_points.append(ca.vertcat(x_gloval, y_gloval))
+            
+            for i, obs_pred_param in enumerate(obs_pred_params):
+                obs_center_k = obs_pred_param[:, k]
+                for pt_global in global_points:
+                    dist = ca.norm_2(pt_global - obs_center_k)
+                    opti.subject_to(dist >= obstacle_safety_margin**2)
     opti.minimize(obj)
 
     # --- (Control/State Limits - same as before) ---
@@ -141,7 +157,12 @@ def mpc_controller(state, ref_traj_segment, N=15, dt=0.1, wheelbase=2.5,
     opti.solver("ipopt", opts)
     opti.set_value(X0, state)
     opti.set_value(X_ref_segment, ref_traj_segment) # Use the segment for cost
-
+    if predicted_obs_centers is not None:
+        for i, obs_pred_param in enumerate(obs_pred_params):
+            if predicted_obs_centers[i].shape == (2, N+1):
+                opti.set_value(obs_pred_param, predicted_obs_centers[i])
+            else:
+                print(f"!!! predicted_obs_centers[{i}] has unexpected shape: {predicted_obs_centers[i].shape}")
     try:
         sol = opti.solve()
         optimal_control = np.array([sol.value(U[0, 0]), sol.value(U[1, 0])])
