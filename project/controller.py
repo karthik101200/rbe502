@@ -49,9 +49,9 @@ def mpc_controller(state, ref_traj_segment, N=15, dt=0.1, wheelbase=2.5,
     # A more robust method involves CasADi functions or lookup tables.
     closest_center_index = 0
     if centerline_ref_full is not None:
-         # Find index on full centerline closest to initial state for this horizon
-         distances = cdist(state[:2].reshape(1,-1), centerline_ref_full)
-         closest_center_index = np.argmin(distances)
+        # Find index on full centerline closest to initial state for this horizon
+        distances = cdist(state[:2].reshape(1,-1), centerline_ref_full)
+        closest_center_index = np.argmin(distances)
 
 
     for k in range(N):

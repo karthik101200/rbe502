@@ -205,7 +205,7 @@ def generate_path(path_type="racetrack", **kwargs):
         dx, dy = interpolate.splev(0, tck, der=1)
         start_state[2] = np.arctan2(dy, dx)
         start_state[3] = 1.0
-        sim_duration_estimate = 100.0
+        sim_duration_estimate = 120.0
 
     else:
         raise ValueError(f"Unknown path_type: {path_type}")
